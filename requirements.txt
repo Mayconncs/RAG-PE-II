@@ -1,0 +1,9 @@
+pymupdf
+lancedb
+sentence-transformers
+agno
+openai
+python-dotenv
+rich
+# Só para PDFs escaneados (setup/NVIDIA ou setup/AMD):
+# marker-pdf
