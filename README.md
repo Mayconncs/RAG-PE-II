@@ -53,7 +53,7 @@ As perguntas e os trechos recuperados são enviados ao OpenRouter; a chave fica 
 Após reindexar documentos ou alterar o `.env`, reinicie o backend para atualizar os caches.
 
 Para desenvolver com atualização automática, rode `python -m uvicorn api:app --reload`
-na raiz e, em outro terminal, `cd frontend` seguido de `npm run dev`.
+na raiz e, em outro terminal, `npm run dev` também na raiz.
 Abra o endereço mostrado pelo Vite (normalmente `http://localhost:5173`). O proxy
 encaminha `/api` para o backend, sem expor a chave no frontend.
 Use Node.js 22 ou superior. O build gera `frontend/dist`, servido pelo FastAPI.
