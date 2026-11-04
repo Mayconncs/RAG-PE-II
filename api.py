@@ -14,7 +14,7 @@ from config import DB_PATH, NOME_TABELA, PASTA_PDFS
 from busca import catalogo, recuperar, formatar_contexto
 from main import API_KEY, MODELOS, montar_pergunta, responder
 
-app = FastAPI(title="Consulta Saúde · TO")
+app = FastAPI(title="Consulta Saúde - TO")
 _consulta_lock = threading.Lock()
 
 
