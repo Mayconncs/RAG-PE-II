@@ -28,6 +28,28 @@ RAG-PE-II/
 
 ---
 
+## Interface web (Streamlit)
+
+Com o ambiente virtual ativo, instale as dependências e abra a interface:
+
+```powershell
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+Acesse `http://localhost:8501`. Para encerrar o servidor, pressione `Ctrl+C` no terminal.
+A interface usa o mesmo `.env` e a mesma base local do terminal. Se ainda não preparou a
+base, execute `extrair_pdfs.py`, `fazer_chunks.py` e `criar_indice_bm25.py`, nessa ordem.
+
+Inclui histórico por sessão, nova conversa, exportação em texto, catálogo dos atos e
+trechos consultados em cada resposta. O histórico não é salvo permanentemente.
+A primeira pergunta pode demorar para carregar ou baixar o modelo de embeddings.
+As perguntas e os trechos recuperados são enviados ao OpenRouter; a chave fica no servidor.
+`openrouter/free` identifica a rota configurada, não o modelo específico escolhido pelo provedor.
+Após reindexar documentos ou alterar o `.env`, reinicie o Streamlit para atualizar os caches.
+
+O chat de terminal continua disponível com `python main.py`.
+
 ## 🚀 Como executar
 
 ```bash

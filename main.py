@@ -18,8 +18,6 @@ console = Console()
 load_dotenv()
 
 API_KEY = os.getenv("OPENROUTER_API_KEY")
-if not API_KEY:
-    raise ValueError("OPENROUTER_API_KEY não encontrada. Crie um arquivo .env com essa variável.")
 
 # Modelos, em ordem de preferência (o próximo só é usado se o anterior falhar).
 # Para usar o roteador gratuito padrão do OpenRouter (sorteia um modelo :free a cada pergunta):
@@ -66,9 +64,6 @@ INSTRUCOES = [
     "Se não houver informação na base, diga isso claramente em vez de supor. Não dê parecer jurídico; apresente o que as normas dizem.",
 ]
 
-_agentes = {}
-
-
 def _novo_modelo(model_id: str):
     try:
         return OpenRouter(id=model_id, api_key=API_KEY, max_tokens=MAX_TOKENS_RESPOSTA, temperature=0.2)
@@ -77,15 +72,14 @@ def _novo_modelo(model_id: str):
 
 
 def _agente(model_id: str) -> Agent:
-    if model_id not in _agentes:
-        _agentes[model_id] = Agent(
-            name="Assistente RAG - Legislação da Saúde (TO)",
-            model=_novo_modelo(model_id),
-            tools=[buscar_contexto, listar_documentos] if USAR_FERRAMENTAS else [],
-            instructions=INSTRUCOES,
-            markdown=True,
-        )
-    return _agentes[model_id]
+    # Cada execução tem seu próprio agente, sem estado compartilhado entre usuários.
+    return Agent(
+        name="Assistente RAG - Legislação da Saúde (TO)",
+        model=_novo_modelo(model_id),
+        tools=[buscar_contexto, listar_documentos] if USAR_FERRAMENTAS else [],
+        instructions=INSTRUCOES,
+        markdown=True,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -94,24 +88,28 @@ def _agente(model_id: str) -> Agent:
 _trocas = []   # [(pergunta, resposta)]
 
 
-def _historico_txt() -> str:
-    if not _trocas:
+def _historico_txt(historico=None) -> str:
+    historico = _trocas if historico is None else historico
+    if not historico:
         return ""
-    linhas = [f"Pergunta anterior: {p}\nResposta anterior (resumo): {r[:500]}" for p, r in _trocas[-2:]]
+    linhas = [f"Pergunta anterior: {p}\nResposta anterior (resumo): {r[:500]}" for p, r in historico[-2:]]
     return ("Conversa anterior (use só para entender referências como 'ele', 'isso', 'e o enfermeiro?'; "
             "os fatos devem vir dos trechos abaixo):\n" + "\n\n".join(linhas) + "\n\n")
 
 
-def montar_pergunta(pergunta: str) -> str:
+def montar_pergunta(pergunta: str, historico=None, contexto=None) -> str:
     """Recuperação automática: o contexto vai junto com a pergunta, então o modelo
     responde com base nos documentos mesmo sem chamar ferramentas."""
+    historico = _trocas if historico is None else historico
     consulta = pergunta
-    if _trocas and len(pergunta.split()) <= 4:   # follow-up curto ("e o enfermeiro?")
-        consulta = f"{_trocas[-1][0]} {pergunta}"
+    if historico and len(pergunta.split()) <= 4:
+        consulta = f"{historico[-1][0]} {pergunta}"
+    if contexto is None:
+        contexto = recuperar_contexto(consulta)
     return (
-        f"{_historico_txt()}"
+        f"{_historico_txt(historico)}"
         "Trechos recuperados automaticamente da base para esta pergunta:\n\n"
-        f"{recuperar_contexto(consulta)}\n\n"
+        f"{contexto}\n\n"
         f"Pergunta do usuário: {pergunta}"
     )
 
@@ -187,6 +185,8 @@ def responder(mensagem: str):
     """Tenta cada modelo da lista. Devolve (texto, modelo, aviso).
     Respostas INCOMPLETAS (cortadas ou interrompidas) também são devolvidas, com um aviso,
     quando nenhum modelo consegue entregar a resposta inteira."""
+    if not API_KEY:
+        return None, None, "Configure OPENROUTER_API_KEY no arquivo .env e reinicie a aplicação."
     melhor = None                                # (texto, modelo, motivo) da melhor resposta incompleta
     for rodada in range(2):
         limite_minuto = False
@@ -224,6 +224,7 @@ def responder(mensagem: str):
         return melhor[0], melhor[1], (
             f"⚠ RESPOSTA POSSIVELMENTE INCOMPLETA ({melhor[2]})."
         )
+    return None, None, "Não foi possível obter uma resposta do OpenRouter. Verifique a chave, a conexão e a disponibilidade do modelo e tente novamente."
 
 
 if __name__ == "__main__":
