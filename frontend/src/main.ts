@@ -52,7 +52,7 @@ $('#app').innerHTML = `
  <p class="disclaimer">A IA pode cometer erros. Confira as fontes e possíveis alterações posteriores nas normas.</p></div>
  </main>
 </div>
-<dialog id="catalog-dialog"><div class="dialog-heading"><div><small>BIBLIOTECA LOCAL</small><h2>Documentos da base</h2></div><button id="close-dialog" class="icon-button" aria-label="Fechar documentos">${icon('x')}</button></div><div id="catalog-content"></div></dialog>`;
+<dialog id="catalog-dialog" aria-labelledby="catalog-title"><div class="dialog-heading"><div><small>BIBLIOTECA LOCAL</small><h2 id="catalog-title">Documentos disponíveis</h2></div><button id="close-dialog" class="icon-button" aria-label="Fechar documentos">${icon('x')}</button></div><div id="catalog-content"></div></dialog>`;
 
 function drawIcons(){ createIcons({icons: {Library, Plus, MessagesSquare, Files, ChevronRight, Quote, Download, ShieldCheck, RefreshCw, Sparkles, Clock3, Landmark, ArrowUpRight, ScanText, Paperclip, ArrowUp, Menu, LoaderCircle, X, UserRound, Copy, BookOpen, ChevronDown}}); }
 function notice(text:string){ const aviso=text||avisoHistorico; $('#notice-text').textContent=aviso; $('#notice').hidden=!aviso; }
@@ -122,6 +122,15 @@ $('#messages').addEventListener('click',async e=>{const button=(e.target as HTML
 $('#export').onclick=()=>{const text=mensagens.map(m=>`${m.role==='user'?'Você':'Consulta'}\n${m.content}${m.dados?'\n\nFontes:\n'+m.dados.fontes.map(f=>`${f.ato} | ${f.artigos} | ${f.fonte} | p. ${f.paginas}`).join('\n'):''}`).join('\n\n---\n\n');const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='consulta-saude.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('#documents').onclick=async()=>{closeMenu();$<HTMLDialogElement>('#catalog-dialog').showModal();$('#catalog-content').textContent='Carregando documentos…';try{const d=await request<{catalogo:string}>('/api/documentos');$('#catalog-content').innerHTML=markdown(d.catalogo||'Nenhum ato disponível.');}catch(e){$('#catalog-content').textContent=e instanceof Error?e.message:'Falha ao carregar documentos.';}};
 $('#close-dialog').onclick=()=>$<HTMLDialogElement>('#catalog-dialog').close();
+// Feche apenas quando o clique começar e terminar fora do painel.
+const catalogDialog=$<HTMLDialogElement>('#catalog-dialog');
+function outsideDialog(event:MouseEvent){
+ const rect=catalogDialog.getBoundingClientRect();
+ return event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom;
+}
+let startedOutside=false;
+catalogDialog.addEventListener('pointerdown',event=>{startedOutside=outsideDialog(event);});
+catalogDialog.addEventListener('click',event=>{if(startedOutside && outsideDialog(event))catalogDialog.close();startedOutside=false;});
 $('#header-documents').onclick=()=>$('#documents').click();
 $('#history-list').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-conversation]');if(!b||ocupado)return;const c=conversas.find(c=>c.id===b.dataset.conversation);if(c){conversaId=c.id;mensagens=c.messages;render();closeMenu();}};
 $('#delete-chat').onclick=()=>{if(ocupado||!confirm('Excluir esta conversa salva neste navegador?'))return;conversas=conversas.filter(c=>c.id!==conversaId);mensagens=[];conversaId=crypto.randomUUID();persist();render();};

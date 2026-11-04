@@ -10,3 +10,10 @@
 @media(max-width:1000px){aside{width:235px;padding-left:14px;padding-right:14px}header{padding:0 22px}#welcome{padding-top:40px}h1{font-size:26px}}
 @media(max-width:760px){aside{position:fixed;top:0;bottom:0;left:0;z-index:30;transform:translateX(-100%);transition:transform .2s;width:264px}.menu-open aside{transform:translateX(0)}.menu-open .overlay{display:block;position:fixed;inset:0;background:#20304a66;z-index:20;border:0}.mobile-only{display:grid}header{height:60px;min-height:60px;padding:0 14px;gap:8px}.breadcrumb{flex:1;font-size:11px;gap:6px}.breadcrumb>svg,.breadcrumb>strong{display:none}header .btn{font-size:11px;padding:0 7px}#welcome{padding:32px 22px 24px}h1{font-size:25px}.intro{font-size:13px;margin-bottom:28px}.composer-area{padding:10px 16px 12px}#messages{padding:12px 18px}.message{gap:10px}.disclaimer{font-size:9px}.composer-bottom{font-size:9px}.answer-meta{gap:8px;flex-wrap:wrap}.source-promise{font-size:11px;align-items:flex-start}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
+
+/* O cabecalho permanece visivel; apenas a lista de documentos rola. */
+#catalog-dialog{padding:0;overflow:hidden}
+#catalog-dialog[open]{display:flex;flex-direction:column}
+#catalog-dialog .dialog-heading{flex-shrink:0;margin:0;padding:20px 24px;border-bottom:1px solid #e2e7ef;background:#fff;gap:16px}
+#catalog-dialog #close-dialog{flex-shrink:0}
+#catalog-dialog #catalog-content{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px;scrollbar-width:thin}
