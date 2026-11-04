@@ -27,11 +27,11 @@ $('#app').innerHTML = `
   <button id="new-chat" class="btn btn-primary new-chat">${icon('plus')} Nova consulta</button>
   <p class="nav-label">CONSULTAR</p>
   <button id="chat-nav" class="nav-item active">${icon('messages-square')} Consulta documental</button>
-  <button id="documents" class="nav-item">${icon('files')} Documentos da base ${icon('chevron-right')}</button>
+  <button id="documents" class="nav-item">${icon('files')} Documentos disponíveis ${icon('chevron-right')}</button>
   <div class="history-heading">CONVERSAS SALVAS <button id="delete-chat" title="Excluir conversa atual" aria-label="Excluir conversa atual">Excluir atual</button></div>
   <div id="history-list" aria-label="Conversas salvas"></div>
-  <div class="sidebar-note"><strong>Sobre esta consulta</strong><p>As respostas usam os documentos indexados na base local.</p><small>Abra as referências de cada resposta para conferir o texto original.</small></div>
-  <div class="sidebar-bottom"><div class="base-card"><div><span id="status-dot" class="dot"></span><strong id="base-status">Conectando à base</strong></div><p id="base-detail">Verificando documentos…</p><button id="refresh">${icon('refresh-cw')} Atualizar conexão</button></div>
+  <div class="sidebar-note"><strong>Sobre esta consulta</strong><p>As respostas são elaboradas a partir dos documentos disponíveis.</p><small>Abra as referências de cada resposta para conferir o texto original.</small></div>
+  <div class="sidebar-bottom">
   <button id="export" class="nav-item" disabled>${icon('download')} Exportar conversa</button><div class="workspace">${icon('shield-check')} Ambiente local <span>v1.0</span></div></div>
  </aside>
  <main><header><button id="menu" class="icon-button mobile-only" aria-label="Abrir menu">${icon('menu')}</button><div class="breadcrumb">Legislação ${icon('chevron-right')} <strong>Consulta documental</strong></div><button id="header-documents" class="btn btn-sm btn-ghost">${icon('book-open')} Ver documentos</button></header>
@@ -47,7 +47,7 @@ $('#app').innerHTML = `
   </div>
   <div class="source-promise">${icon('book-open')} Para uma busca mais precisa, informe a norma, o artigo ou o cargo.</div>
  </section><section id="messages" aria-label="Conversa" aria-live="polite"></section></div>
- <div class="composer-area"><div id="notice" role="status" hidden></div><div id="progress" hidden>${icon('loader-circle')} Buscando nos documentos e preparando sua resposta…</div>
+ <div class="composer-area"><div id="notice" role="status" hidden><span id="notice-text"></span> <button id="refresh" class="btn btn-xs btn-ghost" hidden>Tentar novamente</button></div><div id="progress" hidden>${icon('loader-circle')} Buscando nos documentos e preparando sua resposta…</div>
  <form id="form"><label class="sr-only" for="question">Sua pergunta</label><textarea id="question" rows="1" maxlength="4000" placeholder="Escreva sua pergunta sobre a legislação…" disabled></textarea><div class="composer-bottom"><span>Enter envia · Shift + Enter quebra a linha</span><div><button id="send" class="btn btn-primary btn-sm" type="submit" aria-label="Enviar pergunta" disabled>Enviar ${icon('arrow-up')}</button></div></div></form>
  <p class="disclaimer">A IA pode cometer erros. Confira as fontes e possíveis alterações posteriores nas normas.</p></div>
  </main>
@@ -55,7 +55,7 @@ $('#app').innerHTML = `
 <dialog id="catalog-dialog"><div class="dialog-heading"><div><small>BIBLIOTECA LOCAL</small><h2>Documentos da base</h2></div><button id="close-dialog" class="icon-button" aria-label="Fechar documentos">${icon('x')}</button></div><div id="catalog-content"></div></dialog>`;
 
 function drawIcons(){ createIcons({icons: {Library, Plus, MessagesSquare, Files, ChevronRight, Quote, Download, ShieldCheck, RefreshCw, Sparkles, Clock3, Landmark, ArrowUpRight, ScanText, Paperclip, ArrowUp, Menu, LoaderCircle, X, UserRound, Copy, BookOpen, ChevronDown}}); }
-function notice(text:string){ const aviso=text||avisoHistorico; $('#notice').textContent=aviso; $('#notice').hidden=!aviso; }
+function notice(text:string){ const aviso=text||avisoHistorico; $('#notice-text').textContent=aviso; $('#notice').hidden=!aviso; }
 function closeMenu(){ document.body.classList.remove('menu-open'); }
 function persist(){
  if(mensagens.length){
@@ -89,14 +89,13 @@ async function request<T>(url:string,init?:RequestInit):Promise<T>{
  return data;
 }
 async function checkStatus(){
+ $<HTMLButtonElement>('#refresh').disabled=true;
  try {
-  const s=await request<{base_pronta:boolean; trechos:number; chave_configurada:boolean}>('/api/status');
+  const s=await request<{base_pronta:boolean; chave_configurada:boolean}>('/api/status');
   pronto=s.base_pronta && s.chave_configurada;
-  $('#status-dot').classList.toggle('connected',pronto);
-  $('#base-status').textContent=s.base_pronta?'Base conectada':'Base pendente';
-  $('#base-detail').textContent=`${s.trechos.toLocaleString('pt-BR')} trechos indexados`;
-  notice(!s.base_pronta?'Prepare a base: execute extrair_pdfs.py, fazer_chunks.py e criar_indice_bm25.py em ordem.':!s.chave_configurada?'Configure OPENROUTER_API_KEY no .env e reinicie o backend.':'');
- }catch { pronto=false; $('#base-status').textContent='Servidor indisponível'; $('#base-detail').textContent='Confira se o FastAPI está rodando.'; notice('Não foi possível conectar ao servidor. Execute python -m uvicorn api:app --reload e atualize a conexão.'); }
+  notice(pronto?'':'A consulta está indisponível no momento. Entre em contato com o responsável pelo sistema para verificar '+(!s.base_pronta?'a preparação dos documentos.':'a configuração do serviço.'));
+ }catch { pronto=false; notice('Não foi possível acessar o serviço. Verifique sua conexão e tente novamente. Se o problema continuar, entre em contato com o responsável pelo sistema.'); }
+ finally { $<HTMLButtonElement>('#refresh').disabled=false; $('#refresh').hidden=pronto; }
  updateControls();
 }
 async function send(question:string){
