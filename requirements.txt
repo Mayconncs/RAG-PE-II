@@ -5,5 +5,7 @@ agno
 openai
 python-dotenv
 rich
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
 # Só para PDFs escaneados (setup/NVIDIA ou setup/AMD):
 # marker-pdf

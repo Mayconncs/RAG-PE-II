@@ -1,3 +1,11 @@
+### Dados gerados pelo pipeline RAG ###
+/.lancedb_local/
+/data_texto/
+
+### Frontend ###
+node_modules/
+.npm-cache/
+
 ### Git ###
 # Created by git for backups. To disable backups in Git:
 # $ git config --global mergetool.keepBackup false

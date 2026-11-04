@@ -28,6 +28,47 @@ RAG-PE-II/
 
 ---
 
+## Interface web (HTML + Tailwind + TypeScript + Vite + FastAPI)
+
+Com o ambiente virtual ativo, instale as dependências e abra a interface:
+
+```powershell
+python -m pip install -r requirements.txt
+cd frontend
+npm install
+npm run build
+cd ..
+python -m uvicorn api:app --host 127.0.0.1 --port 8000
+```
+
+Acesse `http://127.0.0.1:8000`. Para encerrar o servidor, pressione `Ctrl+C` no terminal.
+A interface usa o mesmo `.env` e a mesma base local do terminal. Se ainda não preparou a
+base, execute `extrair_pdfs.py`, `fazer_chunks.py` e `criar_indice_bm25.py`, nessa ordem.
+
+Inclui conversas salvas no navegador, nova conversa, exclusão individual, exportação em texto,
+catálogo dos atos e trechos consultados com links para o PDF na página citada.
+A primeira pergunta pode demorar para carregar ou baixar o modelo de embeddings.
+As perguntas e os trechos recuperados são enviados ao OpenRouter; a chave fica no servidor.
+`openrouter/free` identifica a rota configurada, não o modelo específico escolhido pelo provedor.
+Após reindexar documentos ou alterar o `.env`, reinicie o backend para atualizar os caches.
+
+Para desenvolver com atualização automática, rode `python -m uvicorn api:app --reload`
+na raiz e, em outro terminal, `npm run dev` também na raiz.
+Abra o endereço mostrado pelo Vite (normalmente `http://localhost:5173`). O proxy
+encaminha `/api` para o backend, sem expor a chave no frontend.
+Use Node.js 22 ou superior. O build gera `frontend/dist`, servido pelo FastAPI.
+A API recebe até as duas últimas trocas; não guarda conversas no servidor. A interface
+salva as conversas no localStorage e permite reabri-las após recarregar a página. Limpar os dados
+do site apaga o histórico; não há sincronização entre navegadores ou endereços diferentes.
+O servidor local processa uma consulta por vez para proteger o carregamento do modelo e o acesso à base.
+A primeira consulta pode demorar enquanto o modelo é carregado. Os endpoints podem ser explorados em `/docs`.
+
+A versão Streamlit está preservada na branch `feature/interface`, commit `dc60a50`.
+
+O chat de terminal continua disponível com `python main.py`.
+
+Os resultados da avaliação e seus limites estão em [VALIDACAO.md](VALIDACAO.md).
+
 ## 🚀 Como executar
 
 ```bash
