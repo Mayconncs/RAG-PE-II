@@ -2,6 +2,7 @@ import './style.css';
 import { createIcons, Library, Plus, MessagesSquare, Files, ChevronRight, Quote, Download, ShieldCheck, RefreshCw, Sparkles, Clock3, Landmark, ArrowUpRight, ScanText, Paperclip, ArrowUp, Menu, LoaderCircle, X, UserRound, Copy, BookOpen, ChevronDown } from 'lucide';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import {loadHistory, saveHistory, type Conversation} from './history';
 
 type Fonte = {ato:string; artigos:string; fonte:string; paginas:string; content:string};
 type Resposta = {resposta:string; modelo:string; aviso:string|null; notas:string[]; fontes:Fonte[]; segundos:number};
@@ -9,6 +10,10 @@ type Mensagem = {role:'user'|'assistant'; content:string; dados?:Resposta; erro?
 let mensagens:Mensagem[] = [];
 let ocupado = false;
 let pronto = false;
+let conversas:Conversation<Mensagem>[]=[];
+let conversaId:string=crypto.randomUUID();
+let avisoHistorico='';
+let historicoLegivel=true;
 const $ = <T extends HTMLElement = HTMLElement>(selector:string) => document.querySelector<T>(selector)!;
 const esc = (s:string) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const icon = (name:string) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
@@ -23,6 +28,8 @@ $('#app').innerHTML = `
   <p class="nav-label">CONSULTAR</p>
   <button id="chat-nav" class="nav-item active">${icon('messages-square')} Consulta documental</button>
   <button id="documents" class="nav-item">${icon('files')} Documentos da base ${icon('chevron-right')}</button>
+  <div class="history-heading">CONVERSAS SALVAS <button id="delete-chat" title="Excluir conversa atual" aria-label="Excluir conversa atual">Excluir atual</button></div>
+  <div id="history-list" aria-label="Conversas salvas"></div>
   <div class="sidebar-note"><strong>Sobre esta consulta</strong><p>As respostas usam os documentos indexados na base local.</p><small>Abra as referências de cada resposta para conferir o texto original.</small></div>
   <div class="sidebar-bottom"><div class="base-card"><div><span id="status-dot" class="dot"></span><strong id="base-status">Conectando à base</strong></div><p id="base-detail">Verificando documentos…</p><button id="refresh">${icon('refresh-cw')} Atualizar conexão</button></div>
   <button id="export" class="nav-item" disabled>${icon('download')} Exportar conversa</button><div class="workspace">${icon('shield-check')} Ambiente local <span>v1.0</span></div></div>
@@ -48,8 +55,20 @@ $('#app').innerHTML = `
 <dialog id="catalog-dialog"><div class="dialog-heading"><div><small>BIBLIOTECA LOCAL</small><h2>Documentos da base</h2></div><button id="close-dialog" class="icon-button" aria-label="Fechar documentos">${icon('x')}</button></div><div id="catalog-content"></div></dialog>`;
 
 function drawIcons(){ createIcons({icons: {Library, Plus, MessagesSquare, Files, ChevronRight, Quote, Download, ShieldCheck, RefreshCw, Sparkles, Clock3, Landmark, ArrowUpRight, ScanText, Paperclip, ArrowUp, Menu, LoaderCircle, X, UserRound, Copy, BookOpen, ChevronDown}}); }
-function notice(text:string){ $('#notice').textContent=text; $('#notice').hidden=!text; }
+function notice(text:string){ const aviso=text||avisoHistorico; $('#notice').textContent=aviso; $('#notice').hidden=!aviso; }
 function closeMenu(){ document.body.classList.remove('menu-open'); }
+function persist(){
+ if(mensagens.length){
+  const item:Conversation<Mensagem>={id:conversaId,title:mensagens.find(m=>m.role==='user')?.content.slice(0,65)||'Consulta',messages:mensagens,updated:new Date().toISOString()};
+  conversas=[item,...conversas.filter(c=>c.id!==conversaId)];
+ }
+ try{if(historicoLegivel)saveHistory(localStorage,conversas);}catch{avisoHistorico='Não foi possível salvar no navegador. Exporte a conversa para não perdê-la.';notice('');}
+ renderHistory();
+}
+function renderHistory(){
+ $('#history-list').innerHTML=conversas.map(c=>`<button class="history-item ${c.id===conversaId?'selected':''}" data-conversation="${esc(c.id)}" ${ocupado?'disabled':''} title="${esc(c.title)}">${esc(c.title)}</button>`).join('')||'<p>Nenhuma conversa salva.</p>';
+ $<HTMLButtonElement>('#delete-chat').disabled=ocupado||!conversas.some(c=>c.id===conversaId);
+}
 function updateControls(){
  $('#send').toggleAttribute('disabled', ocupado || !pronto || !$<HTMLTextAreaElement>('#question').value.trim());
  $<HTMLTextAreaElement>('#question').disabled=!pronto || ocupado;
@@ -58,6 +77,7 @@ function updateControls(){
  $<HTMLButtonElement>('#export').disabled=!mensagens.length;
 }
 function render(){
+ renderHistory();
  $('#welcome').hidden=mensagens.length>0;
  $('#messages').innerHTML=mensagens.map((m,index)=>`<article class="message ${m.role}"><div class="avatar">${icon(m.role==='user'?'user-round':'library')}</div><div class="message-body"><div class="message-label">${m.role==='user'?'Você':'Consulta'}${m.role==='assistant'?'<span>ASSISTENTE</span>':''}</div><div class="prose ${m.erro?'error-text':''}">${m.role==='user'?`<p>${esc(m.content)}</p>`:markdown(m.content)}</div>${m.dados?`${m.dados.aviso?`<p class="warning">${esc(m.dados.aviso)}</p>`:''}${m.dados.notas.map(n=>`<p class="warning">${esc(n)}</p>`).join('')}<div class="answer-meta"><button class="copy" data-copy="${index}">${icon('copy')} Copiar resposta</button><span>${m.dados.segundos}s · ${esc(m.dados.modelo)}</span></div>${m.dados.fontes.length?`<details class="sources"><summary>${icon('book-open')} ${m.dados.fontes.length} trechos consultados ${icon('chevron-down')}</summary><p class="sources-hint">Confira quais trechos sustentam cada afirmação da resposta.</p>${m.dados.fontes.map(f=>`<details class="source"><summary><strong>${esc(f.ato)}</strong><span>${esc(f.artigos)} · p. ${esc(String(f.paginas))}</span></summary><small>${esc(f.fonte)}</small><a class="pdf-link" target="_blank" rel="noopener noreferrer" href="/api/fontes/${encodeURIComponent(f.fonte.toLowerCase().endsWith('.pdf')?f.fonte:f.fonte+'.pdf')}#page=${Math.max(1,parseInt(String(f.paginas),10)||1)}">Abrir PDF na p?gina ${esc(String(f.paginas).split('-')[0])} ?</a><pre>${esc(f.content)}</pre></details>`).join('')}</details>`:''}`:''}</div></article>`).join('');
  drawIcons(); updateControls();
@@ -84,17 +104,17 @@ async function send(question:string){
  question=question.trim();
  const historico: {pergunta:string;resposta:string}[]=[];
  for(let i=0;i<mensagens.length-1;i++)if(mensagens[i].role==='user' && mensagens[i+1].dados)historico.push({pergunta:mensagens[i].content,resposta:mensagens[i+1].content});
- mensagens.push({role:'user',content:question}); ocupado=true; notice('');
+ mensagens.push({role:'user',content:question}); ocupado=true; notice(''); persist();
  $<HTMLTextAreaElement>('#question').value=''; $<HTMLTextAreaElement>('#question').style.height='auto'; render();
  try {const dados=await request<Resposta>('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pergunta:question,historico:historico.slice(-2)})}); mensagens.push({role:'assistant',content:dados.resposta,dados});}
  catch(e){mensagens.push({role:'assistant',content:e instanceof Error?e.message:'Falha na conexão. Tente novamente.',erro:true});}
- finally{ocupado=false; render(); $<HTMLTextAreaElement>('#question').focus();}
+ finally{ocupado=false; persist(); render(); $<HTMLTextAreaElement>('#question').focus();}
 }
 $('#form').addEventListener('submit',e=>{e.preventDefault();void send($<HTMLTextAreaElement>('#question').value);});
 $('#question').addEventListener('keydown',e=>{const key=e as KeyboardEvent;if(key.key==='Enter'&&!key.shiftKey&&!key.isComposing){e.preventDefault();void send($<HTMLTextAreaElement>('#question').value);}});
 $('#question').addEventListener('input',()=>{const t=$<HTMLTextAreaElement>('#question');t.style.height='auto';t.style.height=`${Math.min(t.scrollHeight,160)}px`;updateControls();});
 document.querySelectorAll<HTMLButtonElement>('[data-question]').forEach(b=>b.onclick=()=>{void send(b.dataset.question!);});
-$('#new-chat').onclick=()=>{if(ocupado)return;mensagens=[];notice('');render();closeMenu();};
+$('#new-chat').onclick=()=>{if(ocupado)return;mensagens=[];conversaId=crypto.randomUUID();notice('');render();closeMenu();};
 $('#refresh').onclick=()=>{void checkStatus();};
 $('#menu').onclick=()=>document.body.classList.toggle('menu-open');
 $('#overlay').onclick=closeMenu;
@@ -104,4 +124,8 @@ $('#export').onclick=()=>{const text=mensagens.map(m=>`${m.role==='user'?'Você'
 $('#documents').onclick=async()=>{closeMenu();$<HTMLDialogElement>('#catalog-dialog').showModal();$('#catalog-content').textContent='Carregando documentos…';try{const d=await request<{catalogo:string}>('/api/documentos');$('#catalog-content').innerHTML=markdown(d.catalogo||'Nenhum ato disponível.');}catch(e){$('#catalog-content').textContent=e instanceof Error?e.message:'Falha ao carregar documentos.';}};
 $('#close-dialog').onclick=()=>$<HTMLDialogElement>('#catalog-dialog').close();
 $('#header-documents').onclick=()=>$('#documents').click();
+$('#history-list').onclick=e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-conversation]');if(!b||ocupado)return;const c=conversas.find(c=>c.id===b.dataset.conversation);if(c){conversaId=c.id;mensagens=c.messages;render();closeMenu();}};
+$('#delete-chat').onclick=()=>{if(ocupado||!confirm('Excluir esta conversa salva neste navegador?'))return;conversas=conversas.filter(c=>c.id!==conversaId);mensagens=[];conversaId=crypto.randomUUID();persist();render();};
+try{conversas=loadHistory<Mensagem>(localStorage);if(conversas.length){conversaId=conversas[0].id;mensagens=conversas[0].messages;}}catch{historicoLegivel=false;avisoHistorico='Não foi possível ler o histórico salvo. Os dados foram preservados; novas conversas não serão salvas. Use a exportação.';notice('');}
 render();void checkStatus();
+
