@@ -12,16 +12,27 @@ from agno.models.openrouter import OpenRouter
 from config import MAX_TOKENS_RESPOSTA, MODELOS_GRATIS, TOP_K, USAR_FERRAMENTAS
 from busca import catalogo, recuperar_contexto
 
-console = Console()
+from agno.agent import Agent
+from agno.models.ollama import Ollama  
 
-# --- Carrega as variáveis do arquivo .env ---
+from config import MAX_TOKENS_RESPOSTA, TOP_K, USAR_FERRAMENTAS
+from busca import catalogo, recuperar_contexto
+
+console = Console()
 load_dotenv()
 
-API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+API_KEY = "ollama-local"
+
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+NUM_CTX = 8192   # IMPORTANTE: o contexto do RAG tem ~4 mil tokens; o padrão do Ollama é menor e corta o prompt
+
+# Troque pelo modelo que você baixou (ollama list)
+MODELOS = [os.getenv("OLLAMA_MODEL", "qwen2.5:7b")]
 
 # Modelos, em ordem de preferência (o próximo só é usado se o anterior falhar).
 # Para usar o roteador gratuito padrão do OpenRouter (sorteia um modelo :free a cada pergunta):
-MODELOS = ["openrouter/free"]
+#MODELOS = ["openrouter/free"]
 # Para fixar modelos específicos, troque a linha acima por algo como:
 # MODELOS = ["nvidia/nemotron-3.5-super-vl:free", "openrouter/free"]
 # (use `python listar_modelos_gratis.py --testar` para ver quais modelos :free estão no ar)
@@ -61,14 +72,15 @@ INSTRUCOES = [
     "Para vencimentos e valores em tabelas: confirme a tabela correta (cargo/nível, valor mensal ou valor-hora), o padrão (algarismo romano) e a referência (letra) antes de informar o valor, e copie o número exatamente como está no trecho.",
     "Se o trecho indicar que um dispositivo foi alterado ou acrescentado por outra lei ('redação dada', 'acrescentado pela Lei'), informe isso. Avise que a base pode não conter alterações ou revogações posteriores.",
     "Trechos cujo cabeçalho diz 'trecho sem cabeçalho de ato' podem pertencer a outro ato do Diário Oficial: sinalize a incerteza sobre a qual norma pertencem.",
-    "Se não houver informação na base, diga isso claramente em vez de supor. Não dê parecer jurídico; apresente o que as normas dizem.",
+    "Se não houver informação na base, diga isso claramente em vez de supor e explique que vai além do seu escopo (informações disponiveis). Não dê parecer jurídico; apresente o que as normas dizem.",
 ]
 
 def _novo_modelo(model_id: str):
-    try:
-        return OpenRouter(id=model_id, api_key=API_KEY, max_tokens=MAX_TOKENS_RESPOSTA, temperature=0.2)
-    except TypeError:  # versão do Agno sem esses parâmetros
-        return OpenRouter(id=model_id, api_key=API_KEY)
+    return Ollama(
+        id=model_id,
+        host=OLLAMA_HOST,
+        options={"temperature": 0.2, "num_predict": MAX_TOKENS_RESPOSTA, "num_ctx": NUM_CTX},
+    )
 
 
 def _agente(model_id: str) -> Agent:
@@ -136,25 +148,19 @@ MSG_DIARIA = ("Limite DIÁRIO de requisições gratuitas do OpenRouter atingido 
 
 
 def _chamar_direto(model_id: str, mensagem: str):
-    """Chamada direta ao OpenRouter (sem Agno). Serve para descobrir o MOTIVO real de uma falha
-    (o Agno engole a mensagem de erro) e, se funcionar, já entrega a resposta.
-    Devolve (texto, erro, limite_diario, limite_minuto)."""
+    """Chamada direta ao Ollama (sem Agno). Devolve (texto, erro, limite_diario, limite_minuto)."""
     try:
-        from openai import OpenAI
-        cli = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=API_KEY, max_retries=0, timeout=90)
-        r = cli.chat.completions.create(
+        import ollama
+        r = ollama.Client(host=OLLAMA_HOST).chat(
             model=model_id,
             messages=[{"role": "system", "content": "\n".join(INSTRUCOES)},
                       {"role": "user", "content": mensagem}],
-            max_tokens=MAX_TOKENS_RESPOSTA, temperature=0.2)
-        texto = _limpar(r.choices[0].message.content) if r.choices else ""
-        return texto, ("" if texto else "o modelo devolveu resposta vazia (modelo de raciocínio sem tokens?)"), False, False
+            options={"temperature": 0.2, "num_predict": MAX_TOKENS_RESPOSTA, "num_ctx": NUM_CTX},
+        )
+        texto = _limpar(r["message"]["content"])
+        return texto, ("" if texto else "o modelo devolveu resposta vazia"), False, False
     except Exception as e:  # noqa: BLE001
-        codigo = getattr(e, "status_code", None)
-        corpo = str(getattr(e, "body", None) or e)
-        diario = codigo == 429 and bool(re.search(r"per[- ]day|daily", corpo, re.IGNORECASE))
-        erro = (f"HTTP {codigo}: " if codigo else "") + corpo[:250]
-        return "", erro, diario, (codigo == 429 and not diario)
+        return "", str(e)[:250], False, False
 
 
 def _executar_agno(model_id: str, mensagem: str):
@@ -224,7 +230,7 @@ def responder(mensagem: str):
         return melhor[0], melhor[1], (
             f"⚠ RESPOSTA POSSIVELMENTE INCOMPLETA ({melhor[2]})."
         )
-    return None, None, "Não foi possível obter uma resposta do OpenRouter. Verifique a chave, a conexão e a disponibilidade do modelo e tente novamente."
+    return None, None, "Não foi possível obter resposta do Ollama. Verifique se ele está rodando (`ollama serve`) e se o modelo foi baixado (`ollama pull <modelo>`)."
 
 
 if __name__ == "__main__":
