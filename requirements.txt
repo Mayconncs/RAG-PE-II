@@ -3,6 +3,7 @@ lancedb
 sentence-transformers
 agno
 openai
+ollama
 python-dotenv
 rich
 fastapi>=0.115,<1
