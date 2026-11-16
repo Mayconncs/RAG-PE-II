@@ -6,17 +6,12 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
-from agno.agent import Agent
-from agno.models.openrouter import OpenRouter
-
-from config import MAX_TOKENS_RESPOSTA, MODELOS_GRATIS, TOP_K, USAR_FERRAMENTAS
 from busca import catalogo, recuperar_contexto
 
 from agno.agent import Agent
 from agno.models.ollama import Ollama  
 
 from config import MAX_TOKENS_RESPOSTA, TOP_K, USAR_FERRAMENTAS
-from busca import catalogo, recuperar_contexto
 
 console = Console()
 load_dotenv()
@@ -191,8 +186,6 @@ def responder(mensagem: str):
     """Tenta cada modelo da lista. Devolve (texto, modelo, aviso).
     Respostas INCOMPLETAS (cortadas ou interrompidas) também são devolvidas, com um aviso,
     quando nenhum modelo consegue entregar a resposta inteira."""
-    if not API_KEY:
-        return None, None, "Configure OPENROUTER_API_KEY no arquivo .env e reinicie a aplicação."
     melhor = None                                # (texto, modelo, motivo) da melhor resposta incompleta
     for rodada in range(2):
         limite_minuto = False
@@ -248,7 +241,7 @@ if __name__ == "__main__":
             break
         if pergunta.lower() in {"continuar", "continue"}:
             console.print(
-                "Faça novamente a pergunta completa.[/yellow]"
+                "[yellow]Faça novamente a pergunta completa.[/yellow]"
             )
             continue
         if pergunta.lower() == "/contexto":
